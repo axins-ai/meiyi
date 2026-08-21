@@ -1,4 +1,4 @@
-const CACHE = 'meiyi-v1';
+const CACHE = 'meiyi-v2';
 const ASSETS = [
   './index.html',
   './vendor/tailwind.js',
