@@ -1,0 +1,13 @@
+{
+  "name": "美艺 MeiYi · 批量修图工具",
+  "short_name": "美艺",
+  "description": "批量修图 · AI 会记住你的习惯",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#fff8fb",
+  "theme_color": "#ff6fa8",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
