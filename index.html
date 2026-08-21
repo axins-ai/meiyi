@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>美艺 MeiYi · 批量修图工具</title>
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="icon" type="image/svg+xml" href="icon.svg" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="美艺" />
+<meta name="theme-color" content="#ff6fa8" />
+<link rel="apple-touch-icon" href="icon.svg" />
+<script src="vendor/tailwind.js"></script>
+<script src="vendor/jspdf.umd.min.js"></script>
+<script>
+  tailwind.config = { theme: { extend: { colors: {
+    blush:'#fff7fb', cream:'#fffaf6', card:'#ffffff', line:'#f1e1eb',
+    accent:'#ff6fa8', accent2:'#ffb3c7', accent3:'#7c6cff', gold:'#f6b86b', muted:'#8a7381', text:'#392837'
+  }}}}
+</script>
+<style>
+  :root { color-scheme: light; }
+  * { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", sans-serif; }
+  body { background: linear-gradient(180deg, #fff8fb 0%, #fffdfd 100%); color: #392837; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: #e4c9d6; border-radius: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  .glass { background: rgba(255,255,255,0.88); backdrop-filter: blur(12px); }
+  .grad-accent { background: linear-gradient(135deg, #ff7aa8, #ffb2cb); }
+  .grad-text { background: linear-gradient(135deg, #ff6fa8, #ff9fc0); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .pill { border: 1px solid #ecd5e0; }
+  .pill-active { border-color: #ff6fa8 !important; background: rgba(255,111,168,.12) !important; color: #ff5f9a !important; }
+  .tab-active { background: rgba(255,111,168,.12); color: #ff5f9a; }
+  .slide { animation: slideIn .35s ease; }
+  @keyframes slideIn { from { opacity:0; transform: translateY(8px);} to { opacity:1; transform: translateY(0);} }
+  .shimmer { position: relative; overflow: hidden; }
+  .shimmer::after { content:''; position:absolute; inset:0; background: linear-gradient(90deg, transparent, rgba(255,255,255,.25), transparent); transform: translateX(-100%); animation: shimmer 2.5s infinite; }
+  @keyframes shimmer { 100% { transform: translateX(100%);} }
+  .img-thumb.selected { outline: 3px solid #ff6fa8; outline-offset: 2px; }
+  .chat-msg { max-width: 85%; }
+</style>
+</head>
+<body class="min-h-screen text-[15px]">
+
+<!-- 顶部导航 -->
+<header class="sticky top-0 z-20 glass border-b border-[#ecd5e0] shadow-sm">
+  <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+    <div class="flex items-center gap-2.5">
+      <div class="w-9 h-9 rounded-2xl grad-accent flex items-center justify-center text-white font-bold text-sm">艺</div>
+      <div>
+        <div class="font-semibold leading-none">美艺 <span class="text-[#7d6171] font-normal text-xs">MeiYi</span></div>
+        <div class="text-[10px] text-[#7d6171] mt-0.5">批量修图 · AI 会记住你的习惯</div>
+      </div>
+    </div>
+    <nav class="flex items-center gap-1 text-sm rounded-full bg-white/85 p-1 shadow-sm overflow-x-auto max-w-[72vw]" id="navTabs">
+      <button class="px-3 py-1.5 rounded-full tab-active" data-view="workbench">首页</button>
+      <button class="px-3 py-1.5 rounded-full hover:bg-rose-50 transition" data-view="batch">修图</button>
+      <button class="px-3 py-1.5 rounded-full hover:bg-rose-50 transition" data-view="habit">预设</button>
+      <button class="px-3 py-1.5 rounded-full hover:bg-rose-50 transition" data-view="album">相册</button>
+      <button class="px-3 py-1.5 rounded-full hover:bg-rose-50 transition" data-view="video">视频</button>
+      <button class="px-3 py-1.5 rounded-full hover:bg-rose-50 transition" data-view="post">推文</button>
+      <button class="px-3 py-1.5 rounded-full hover:bg-rose-50 transition" data-view="wallet">会员</button>
+    </nav>
+    <div class="flex items-center gap-2">
+      <span class="text-xs text-[#7d6171] hidden sm:inline">已记录 <span id="navHabitCount">0</span> 个习惯</span>
+      <button class="grad-accent text-white text-sm px-3 py-2 rounded-full font-medium shadow-sm" onclick="switchView('wallet')">去广告</button>
+    </div>
+  </div>
+</header>
+
+<!-- 真实文件导入（隐藏） -->
+<input type="file" id="fileInput" accept="image/*" multiple hidden onchange="handleFiles(event)" />
+
+<main class="max-w-7xl mx-auto px-4 py-6 space-y-6">
+
+  <!-- ============ 首页 ============ -->
+  <section id="view-workbench" class="view slide">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div class="lg:col-span-2 space-y-5">
+        <div class="rounded-3xl p-5 bg-white border border-[#ecd5e0] mb-3">
+          <div class="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <div class="text-sm text-[#7d6171]">今天适合修图的风格</div>
+              <div class="text-2xl font-semibold mt-1">奶油柔光 · 轻复古</div>
+              <div class="text-xs text-[#7d6171] mt-2">AI 已学习你最近的使用习惯，推荐一键套用。</div>
+            </div>
+            <div class="flex gap-2 flex-wrap">
+              <button class="px-4 py-2 rounded-full bg-[#fff4f8] text-[#ff5f9a] border border-[#f4d6e1]" onclick="switchView('habit')">查看推荐</button>
+              <button class="px-4 py-2 rounded-full bg-[#fff4f8] text-[#7c6cff] border border-[#e4ddfb]" onclick="switchView('post')">AI 写推文</button>
+              <button class="px-4 py-2 rounded-full bg-[#fff4f8] text-[#ff5f9a] border border-[#f4d6e1]" onclick="generateAiRepair()">AI 一键修图</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div class="panel rounded-3xl p-4 border border-[#ecd5e0] bg-white"><div class="text-[#7d6171] text-xs">当前图片</div><div class="text-2xl font-bold mt-1" id="statImg">0</div><div class="text-[10px] text-[#7c6cff] mt-1">导入后实时更新</div></div>
+          <div class="panel rounded-3xl p-4 border border-[#ecd5e0] bg-white"><div class="text-[#7d6171] text-xs">保存的习惯</div><div class="text-2xl font-bold mt-1" id="statHabit">0</div><div class="text-[10px] text-[#7d6171] mt-1">预设 + 操作记录</div></div>
+          <div class="panel rounded-3xl p-4 border border-[#ecd5e0] bg-white"><div class="text-[#7d6171] text-xs">成册 / 视频</div><div class="text-2xl font-bold mt-1" id="statAlbum">0</div><div class="text-[10px] text-[#7d6171] mt-1">相册 + 视频产出</div></div>
+          <div class="panel rounded-3xl p-4 border border-[#ecd5e0] bg-white"><div class="text-[#7d6171] text-xs">会员状态</div><div class="text-base font-bold mt-2.5 text-[#d28d48]" id="statMember">免费版</div><div class="text-[10px] text-[#7d6171] mt-1">idol <span id="statIdol">10</span></div></div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="panel rounded-3xl p-5 border border-[#ecd5e0] bg-white">
+            <div class="flex items-center justify-between mb-3"><h3 class="font-semibold">今天的小灵感</h3><span class="text-xs text-[#ff5f9a]">停留内容</span></div>
+            <div class="grid grid-cols-2 gap-2">
+              <div class="rounded-2xl p-3 bg-[#fff4f8] border border-[#f3dbe4]"><div class="font-medium text-sm">旅行季模板</div><div class="text-xs text-[#7d6171] mt-1">浅粉 / 海边 / 轻胶片</div></div>
+              <div class="rounded-2xl p-3 bg-[#fff4f8] border border-[#f3dbe4]"><div class="font-medium text-sm">宝宝相册</div><div class="text-xs text-[#7d6171] mt-1">温柔 / 留白 / 纪念册</div></div>
+              <div class="rounded-2xl p-3 bg-[#fff4f8] border border-[#f3dbe4]"><div class="font-medium text-sm">探店分享</div><div class="text-xs text-[#7d6171] mt-1">出片 / 种草 / 文案</div></div>
+              <div class="rounded-2xl p-3 bg-[#fff4f8] border border-[#f3dbe4]"><div class="font-medium text-sm">婚礼纪念</div><div class="text-xs text-[#7d6171] mt-1">成册 / 视频 / 打印</div></div>
+            </div>
+          </div>
+          <div class="panel rounded-3xl p-5 border border-[#ecd5e0] bg-white">
+            <div class="flex items-center justify-between mb-3"><h3 class="font-semibold">快捷入口</h3><span class="text-xs text-[#7d6171]">更像 App</span></div>
+        <div class="grid grid-cols-2 gap-2">
+          <button class="rounded-2xl bg-[#fff4f8] py-4 text-left px-4" onclick="switchView('batch')"><div class="font-medium">一键修图</div><div class="text-xs text-[#7d6171] mt-1">AI 自动修图</div></button>
+          <button class="rounded-2xl bg-[#fff4f8] py-4 text-left px-4" onclick="switchView('post')"><div class="font-medium">写推文</div><div class="text-xs text-[#7d6171] mt-1">小红书 / 朋友圈</div></button>
+          <button class="rounded-2xl bg-[#fff4f8] py-4 text-left px-4" onclick="switchView('album')"><div class="font-medium">做相册</div><div class="text-xs text-[#7d6171] mt-1">打印 PDF</div></button>
+          <button class="rounded-2xl bg-[#fff4f8] py-4 text-left px-4" onclick="switchView('wallet')"><div class="font-medium">会员 / idol</div><div class="text-xs text-[#7d6171] mt-1">签到 / 任务</div></button>
+        </div>
+        <div class="mt-3 grid grid-cols-3 gap-2">
+          <button class="rounded-2xl bg-white border border-[#ecd5e0] py-3 text-sm" onclick="importImages()">导入图片</button>
+          <button class="rounded-2xl bg-white border border-[#ecd5e0] py-3 text-sm" onclick="switchView('habit')">AI 习惯</button>
+          <button class="rounded-2xl bg-white border border-[#ecd5e0] py-3 text-sm" onclick="openVoiceAssist()">语音修图</button>
+        </div>
+          </div>
+        </div>
+
+        <div class="panel rounded-3xl p-5 border border-[#ecd5e0] bg-white">
+          <div class="flex items-center justify-between mb-4"><h3 class="font-semibold">成长中的 ai 修图助手</h3><span class="text-xs text-[#7c6cff]">会越用越懂你</span></div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div class="rounded-2xl bg-[#fff4f8] p-4"><div class="font-medium">学习你的风格</div><div class="text-xs text-[#7d6171] mt-1">记录滤镜、亮度、裁剪、水印习惯</div></div>
+            <div class="rounded-2xl bg-[#fff4f8] p-4"><div class="font-medium">一键帮你修图</div><div class="text-xs text-[#7d6171] mt-1">上传后直接让 AI 出图，再做微调</div></div>
+            <div class="rounded-2xl bg-[#fff4f8] p-4"><div class="font-medium">越用越聪明</div><div class="text-xs text-[#7d6171] mt-1">从预设工具成长为你的私有审美助理</div></div>
+          </div>
+          <div class="mt-4 rounded-2xl bg-[#fffafc] border border-[#ecd5e0] p-4">
+            <div class="flex items-center justify-between mb-2"><div class="font-medium">AI 学习轨迹</div><span class="text-xs text-[#7d6171]">成长型</span></div>
+            <div class="grid grid-cols-3 gap-2 text-xs">
+              <div class="rounded-xl bg-white border border-[#ecd5e0] p-2">第1周：只会套滤镜</div>
+              <div class="rounded-xl bg-white border border-[#ecd5e0] p-2">第2周：学会识别人像/背景</div>
+              <div class="rounded-xl bg-white border border-[#ecd5e0] p-2">第4周：能按你习惯自动修图</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="space-y-5">
+        <div class="rounded-3xl p-5 grad-accent text-white shadow-sm">
+          <h3 class="font-bold text-lg">开始批量修图</h3>
+          <p class="text-sm opacity-90 mt-1">一次导入多张，一键套用你的预设</p>
+          <button class="mt-4 w-full bg-white/20 hover:bg-white/30 transition rounded-lg py-2.5 font-medium" onclick="importImages()">＋ 导入图片开始</button>
+        </div>
+        <div class="panel rounded-3xl p-5 border border-[#ecd5e0] bg-white">
+          <h3 class="font-semibold mb-3">快捷能力</h3>
+          <div class="space-y-2">
+            <button class="w-full flex items-center gap-3 p-3 rounded-2xl bg-rose-50 hover:bg-rose-100 transition" onclick="switchView('album')"><span class="text-xl">📔</span><div class="text-left"><div class="text-sm font-medium">相册</div><div class="text-xs text-[#7d6171]">导出可打印 PDF 相册</div></div></button>
+            <button class="w-full flex items-center gap-3 p-3 rounded-2xl bg-rose-50 hover:bg-rose-100 transition" onclick="switchView('video')"><span class="text-xl">🎬</span><div class="text-left"><div class="text-sm font-medium">视频</div><div class="text-xs text-[#7d6171]">图片组合滑动相册视频</div></div></button>
+            <button class="w-full flex items-center gap-3 p-3 rounded-2xl bg-rose-50 hover:bg-rose-100 transition" onclick="switchView('habit')"><span class="text-xl">🧠</span><div class="text-left"><div class="text-sm font-medium">我的习惯</div><div class="text-xs text-[#7d6171]">AI 自动记录的修图配方</div></div></button>
+            <button class="w-full flex items-center gap-3 p-3 rounded-2xl bg-rose-50 hover:bg-rose-100 transition" onclick="switchView('post')"><span class="text-xl">✍️</span><div class="text-left"><div class="text-sm font-medium">写推文</div><div class="text-xs text-[#7d6171]">小红书 / 朋友圈文案</div></div></button>
+            <button class="w-full flex items-center gap-3 p-3 rounded-2xl bg-rose-50 hover:bg-rose-100 transition" onclick="switchView('wallet')"><span class="text-xl">💳</span><div class="text-left"><div class="text-sm font-medium">会员中心</div><div class="text-xs text-[#7d6171]">idol / 会员 / 连续包月</div></div></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 修图 ============ -->
+  <section id="view-batch" class="view hidden">
+    <div class="grid grid-cols-1 xl:grid-cols-3 gap-5">
+      <div class="xl:col-span-2">
+        <div class="panel rounded-3xl p-5 border border-[#ecd5e0] bg-white">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="font-semibold">图片队列 <span class="text-[#7d6171] text-xs font-normal" id="queueCount">0 张已导入</span></h3>
+            <button class="text-xs border border-[#ecd5e0] rounded-lg px-3 py-1.5 hover:bg-rose-50 transition" onclick="importImages()">＋ 导入图片</button>
+          </div>
+          <div class="grid grid-cols-3 sm:grid-cols-4 gap-3" id="imgGrid"></div>
+          <p class="text-xs text-[#7d6171] mt-4">💡 点击图片可单张选中高亮，批量套用预设会应用到全部图片。下方调节会实时作用于所有图。</p>
+          <div class="mt-3 rounded-2xl bg-[#fff4f8] p-3 text-xs text-[#7d6171]">AI 习惯：本次操作（滤镜/亮度/水印）会被记录，下次导入自动推荐同款配方。</div>
+        </div>
+      </div>
+
+      <div class="panel rounded-3xl p-5 border border-[#ecd5e0] bg-white">
+        <h3 class="font-semibold mb-4">统一预设 <span class="text-xs text-[#ff5f9a]" id="aiRec">AI 推荐：电商暖色</span></h3>
+
+        <div class="mb-5">
+          <div class="text-xs text-[#7d6171] mb-2">滤镜</div>
+          <div class="flex flex-wrap gap-2" id="filterGroup">
+            <button class="pill px-3 py-1.5 rounded-lg text-sm pill-active" onclick="applyFilter('warm', this)">暖色</button>
+            <button class="pill px-3 py-1.5 rounded-lg text-sm" onclick="applyFilter('cool', this)">冷调</button>
+            <button class="pill px-3 py-1.5 rounded-lg text-sm" onclick="applyFilter('bw', this)">黑白</button>
+            <button class="pill px-3 py-1.5 rounded-lg text-sm" onclick="applyFilter('vintage', this)">复古</button>
+            <button class="pill px-3 py-1.5 rounded-lg text-sm" onclick="applyFilter('fade', this)">褪色</button>
+          </div>
+        </div>
+
+        <div class="space-y-4 mb-5">
+          <div class="grid grid-cols-2 gap-2 mb-4">
+            <button class="rounded-2xl border border-[#ecd5e0] py-2 bg-white text-sm" onclick="toggleChip(this)">人像美肤</button>
+            <button class="rounded-2xl border border-[#ecd5e0] py-2 bg-white text-sm" onclick="toggleChip(this)">背景虚化</button>
+            <button class="rounded-2xl border border-[#ecd5e0] py-2 bg-white text-sm" onclick="toggleChip(this)">九宫格</button>
+            <button class="rounded-2xl border border-[#ecd5e0] py-2 bg-white text-sm" onclick="toggleChip(this)">统一边框</button>
+          </div>
+          <div><div class="flex justify-between text-xs text-[#7d6171] mb-1"><span>亮度</span><span id="val-br">105</span></div>
+            <input type="range" min="80" max="130" value="105" class="w-full accent-[#7c5cff]" oninput="updateBrightness(this.value)"></div>
+          <div><div class="flex justify-between text-xs text-[#7d6171] mb-1"><span>饱和度</span><span id="val-sat">130</span></div>
+            <input type="range" min="0" max="200" value="130" class="w-full accent-[#7c5cff]" oninput="updateSaturation(this.value)"></div>
+          <div><div class="flex justify-between text-xs text-[#7d6171] mb-1"><span>对比度</span><span id="val-con">108</span></div>
+            <input type="range" min="80" max="140" value="108" class="w-full accent-[#7c5cff]" oninput="updateContrast(this.value)"></div>
+        </div>
+
+        <div class="mb-5">
+          <div class="text-xs text-[#7d6171] mb-2">水印</div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <label class="flex items-center gap-2 text-sm"><input type="checkbox" id="wmChk" checked class="accent-[#7c5cff]" onchange="applyWatermark()"> 添加水印</label>
+            <input type="text" id="wmText" value="@美艺用户" class="bg-rose-50 border border-[#ecd5e0] rounded-lg px-3 py-1.5 text-sm flex-1 min-w-[120px]" oninput="applyWatermark()">
+          </div>
+        </div>
+
+        <div class="mb-5">
+          <div class="text-xs text-[#7d6171] mb-2">裁剪比例</div>
+          <div class="flex gap-2" id="ratioGroup">
+            <button class="pill px-3 py-1.5 rounded-lg text-sm" onclick="setRatio('1:1', this)">1:1</button>
+            <button class="pill px-3 py-1.5 rounded-lg text-sm pill-active" onclick="setRatio('4:3', this)">4:3</button>
+            <button class="pill px-3 py-1.5 rounded-lg text-sm" onclick="setRatio('3:4', this)">3:4</button>
+            <button class="pill px-3 py-1.5 rounded-lg text-sm" onclick="setRatio('16:9', this)">16:9</button>
+          </div>
+        </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <button class="border border-[#ecd5e0] rounded-lg py-2.5 text-sm hover:bg-rose-50 transition" onclick="savePreset()">💾 存为预设</button>
+            <button class="grad-accent rounded-lg py-2.5 text-sm text-white font-medium" onclick="batchApply()">一键套用全部</button>
+            <button class="border border-[#ecd5e0] rounded-lg py-2.5 text-sm hover:bg-rose-50 transition" onclick="generateAiRepair()">AI 一键修图</button>
+            <button class="border border-[#ecd5e0] rounded-lg py-2.5 text-sm hover:bg-rose-50 transition" onclick="saveCurrentStyle()">保存当前风格</button>
+          </div>
+          <div class="mt-3 rounded-3xl border border-[#ecd5e0] bg-white p-4">
+            <div class="flex items-center justify-between mb-3"><div class="font-medium">修图结果预览</div><span class="text-xs text-[#7d6171]">实时</span></div>
+            <div class="grid grid-cols-2 gap-2 text-xs">
+              <div class="rounded-2xl bg-[#fff4f8] p-3">人像：磨皮 + 亮眼 + 轻收腰</div>
+              <div class="rounded-2xl bg-[#fff4f8] p-3">风景：天空增强 + 色温偏暖</div>
+              <div class="rounded-2xl bg-[#fff4f8] p-3">宝宝：柔光 + 低饱和 + 留白</div>
+              <div class="rounded-2xl bg-[#fff4f8] p-3">美食：提亮高光 + 饱和增强</div>
+            </div>
+          </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 预设 ============ -->
+  <section id="view-habit" class="view hidden">
+    <div class="panel rounded-3xl p-5 border border-[#ecd5e0] bg-white">
+      <div class="flex items-center justify-between mb-5">
+        <h3 class="font-semibold">我的预设 <span class="text-xs text-[#7d6171] font-normal" id="presetCount"></span></h3>
+        <button class="text-xs border border-[#ecd5e0] rounded-lg px-3 py-1.5 hover:bg-rose-50 transition" onclick="switchView('batch')">＋ 去修图页新建</button>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" id="presetGrid"></div>
+
+      <div class="mt-6 p-4 rounded-xl border border-accent/30 bg-[#fff4f8]">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="text-base">🧠</span>
+          <span class="font-medium">AI 智能推荐</span>
+        </div>
+        <p class="text-sm text-[#7d6171]">根据你最近的操作习惯，推荐用 <span class="text-[#ff5f9a]">「电商暖色」</span> 处理本批商品图。它和你之前的「店铺上新」任务参数相似度 <span class="text-[#7c6cff]">92%</span>。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 相册 ============ -->
+  <section id="view-album" class="view hidden">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div class="panel rounded-3xl p-5 border border-[#ecd5e0] bg-white">
+        <h3 class="font-semibold mb-4">相册设置</h3>
+        <div class="mb-4">
+          <div class="text-xs text-[#7d6171] mb-2">版式</div>
+          <div class="grid grid-cols-3 gap-2" id="albumLayout">
+            <button class="p-3 rounded-lg border border-[#ecd5e0] text-center hover:border-accent transition" onclick="selectAlbumLayout(this)">
+              <div class="w-10 h-10 mx-auto rounded mb-1 bg-rose-50"></div>
+              <div class="text-xs">方册</div>
+            </button>
+            <button class="p-3 rounded-lg border border-[#ecd5e0] text-center hover:border-accent transition border-accent" onclick="selectAlbumLayout(this)">
+              <div class="w-8 h-11 mx-auto rounded mb-1 bg-rose-50"></div>
+              <div class="text-xs">竖册</div>
+            </button>
+            <button class="p-3 rounded-lg border border-[#ecd5e0] text-center hover:border-accent transition" onclick="selectAlbumLayout(this)">
+              <div class="w-11 h-8 mx-auto rounded mb-1 bg-rose-50"></div>
+              <div class="text-xs">横册</div>
+            </button>
+          </div>
+        </div>
+        <div class="mb-4">
+          <div class="text-xs text-[#7d6171] mb-2">排版模板</div>
+          <div class="flex gap-2" id="albumTpl">
+            <button class="pill px-3 py-1.5 rounded-lg text-sm pill-active" onclick="selectTpl(this)">简约留白</button>
+            <button class="pill px-3 py-1.5 rounded-lg text-sm" onclick="selectTpl(this)">满版照片</button>
+            <button class="pill px-3 py-1.5 rounded-lg text-sm" onclick="selectTpl(this)">日记拼贴</button>
+          </div>
+        </div>
+        <div class="mb-4">
+          <div class="text-xs text-[#7d6171] mb-2">封面标题</div>
+          <input type="text" id="albumTitle" value="我们的旅行记忆 2026" class="w-full bg-rose-50 border border-[#ecd5e0] rounded-lg px-3 py-2 text-sm">
+        </div>
+        <div class="mb-5">
+          <div class="text-xs text-[#7d6171] mb-2">页数预览</div>
+          <div class="text-sm" id="albumPages">— 张 → — 页</div>
+        </div>
+        <button class="w-full grad-accent rounded-full py-2.5 text-white font-medium" onclick="showPdfModal()">生成可打印 PDF</button>
+        <div class="grid grid-cols-2 gap-2 mt-3"><button class="rounded-full bg-[#fff4f8] text-[#ff5f9a] py-2 text-sm" onclick="showToast('已准备分享到朋友圈（演示）')">分享到朋友圈</button><button class="rounded-full bg-[#fff4f8] text-[#ff5f9a] py-2 text-sm" onclick="showToast('已准备分享到小红书（演示）')">分享到小红书</button></div>
+        <p class="text-xs text-[#7d6171] mt-2 text-center">本次合成消耗 8 idol（首次免费）</p>
+      </div>
+
+      <div class="panel rounded-3xl p-5 border border-[#ecd5e0] bg-white">
+        <h3 class="font-semibold mb-4">实时预览</h3>
+        <div class="grid grid-cols-2 gap-3" id="albumPreview"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 推文 ============ -->
+  <section id="view-post" class="view hidden">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div class="panel rounded-3xl p-5 border border-[#ecd5e0] bg-white">
+        <div class="flex items-center justify-between mb-4"><h3 class="font-semibold">ai 写推文</h3><span class="text-xs text-[#ff5f9a]">首次免费</span></div>
+        <div class="space-y-4">
+          <div class="rounded-2xl bg-[#fff4f8] border border-[#f4d6e1] p-3 text-sm">你可以直接说："帮我写一篇小红书，主题是奶油风旅行照，语气要温柔一点"</div>
+          <div>
+            <div class="text-xs text-[#7d6171] mb-2">内容类型</div>
+            <div class="flex gap-2 flex-wrap" id="postType">
+              <button class="pill px-3 py-1.5 rounded-lg text-sm pill-active" onclick="selectPostType(this)">小红书</button>
+              <button class="pill px-3 py-1.5 rounded-lg text-sm" onclick="selectPostType(this)">朋友圈</button>
+              <button class="pill px-3 py-1.5 rounded-lg text-sm" onclick="selectPostType(this)">双平台</button>
+            </div>
+          </div>
+          <div>
+            <div class="text-xs text-[#7d6171] mb-2">主题标签</div>
+            <div class="grid grid-cols-2 gap-2" id="postTopic">
+              <button class="rounded-2xl border border-[#ecd5e0] py-2 bg-white text-sm" onclick="toggleChip(this)">旅行出片</button>
+              <button class="rounded-2xl border border-[#ecd5e0] py-2 bg-white text-sm" onclick="toggleChip(this)">探店分享</button>
+              <button class="rounded-2xl border border-[#ecd5e0] py-2 bg-white text-sm" onclick="toggleChip(this)">宝宝日常</button>
+              <button class="rounded-2xl border border-[#ecd5e0] py-2 bg-white text-sm" onclick="toggleChip(this)">婚礼纪念</button>
+            </div>
+          </div>
+          <textarea id="postInput" class="w-full h-28 rounded-2xl border border-[#ecd5e0] bg-[#fffafc] p-3 text-sm" placeholder="输入关键词，比如：奶油风、旅行、ins感、宝宝照片"></textarea>
+          <div id="postResult" class="hidden rounded-2xl bg-[#fff4f8] border border-[#f4d6e1] p-3 text-sm whitespace-pre-wrap"></div>
+          <div class="grid grid-cols-2 gap-2"><button class="grad-accent rounded-full py-2.5 text-white font-medium" onclick="genCopy('xhs')">生成小红书推文</button><button class="rounded-full bg-[#fff4f8] text-[#ff5f9a] py-2.5" onclick="genCopy('moments')">生成朋友圈文案</button></div>
+          <div class="grid grid-cols-2 gap-2"><button class="rounded-full border border-[#ecd5e0] py-2.5 bg-white" onclick="copyPost()">复制文案</button><button class="rounded-full border border-[#ecd5e0] py-2.5 bg-white" onclick="showToast('已尝试打开小红书分享页（演示）')">推送到小红书</button></div>
+        </div>
+      </div>
+      <div class="panel rounded-3xl p-5 border border-[#ecd5e0] bg-white">
+        <div class="flex items-center justify-between mb-4"><h3 class="font-semibold">ai 对话助手</h3><span class="text-xs text-[#7c6cff]">可直接操作 app</span></div>
+        <div class="flex flex-col h-[360px]">
+          <div id="chatLog" class="flex-1 overflow-y-auto space-y-2 p-2 bg-[#fffafc] rounded-2xl border border-[#ecd5e0]">
+            <div class="chat-msg rounded-2xl bg-[#fff4f8] border border-[#f4d6e1] p-3 text-sm self-start">你好，我是你的专属修图助手。试试说："把这批照片调成更奶油一点，并生成小红书文案"</div>
+          </div>
+          <div class="mt-2 flex gap-2">
+            <input id="chatInput" class="flex-1 rounded-full border border-[#ecd5e0] bg-white px-4 py-2 text-sm" placeholder="直接说你的需求…" onkeydown="if(event.key==='Enter')sendAi()">
+            <button class="grad-accent rounded-full px-4 py-2 text-white text-sm" onclick="sendAi()">发送</button>
+            <button class="rounded-full bg-[#fff4f8] text-[#ff5f9a] px-3 py-2 text-sm border border-[#f4d6e1]" onclick="openVoiceAssist()" title="语音">🎤</button>
+          </div>
+        </div>
+        <div class="rounded-2xl bg-[#fffafc] border border-[#ecd5e0] p-3 text-xs text-[#7d6171] mt-3">注：语音识别依赖浏览器（Chrome 支持最佳）。Demo 中对话会真实解析关键词并调用对应功能。</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 会员 ============ -->
+  <section id="view-wallet" class="view hidden">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div class="panel rounded-3xl p-5 border border-[#ecd5e0] bg-white">
+        <div class="flex items-center justify-between mb-4"><h3 class="font-semibold">会员与 idol</h3><span class="text-xs text-[#d28d48]">首次生成免费</span></div>
+        <div class="rounded-3xl p-4 bg-[#fff4f8] border border-[#f4d6e1] mb-4">
+          <div class="flex items-center justify-between"><div><div class="text-sm text-[#7d6171]">当前 idol</div><div class="text-3xl font-bold mt-1" id="idolBig">10</div></div><button id="signBtn" class="rounded-full bg-white px-4 py-2 text-[#ff5f9a] border border-[#f4d6e1]" onclick="dailyLogin()">每日签到 +3</button></div>
+          <div class="text-xs text-[#7d6171] mt-3">生成、合成视频、导出相册 PDF、AI 一键修图都会消耗 idol；首次使用免费。idol 与签到状态已本地保存。</div>
+        </div>
+        <div class="grid grid-cols-2 gap-2 mb-4">
+          <button class="rounded-2xl border border-[#ecd5e0] py-3 bg-white text-sm" onclick="wallTask()">完成任务赚 idol</button>
+          <button class="rounded-2xl border border-[#ecd5e0] py-3 bg-white text-sm" onclick="wallTask()">积分墙任务</button>
+          <button class="rounded-2xl border border-[#ecd5e0] py-3 bg-white text-sm" onclick="dailyLogin()">签到领奖励</button>
+          <button class="rounded-2xl border border-[#ecd5e0] py-3 bg-white text-sm" onclick="inviteFriend()">邀请好友 +5</button>
+        </div>
+        <div class="rounded-2xl border border-[#ecd5e0] p-4">
+          <div class="font-medium mb-2">会员方案</div>
+          <div class="grid grid-cols-2 gap-2 text-sm" id="planGrid">
+            <div class="rounded-2xl bg-[#fff4f8] p-3 cursor-pointer hover:ring-2 ring-accent" onclick="buyPlan('月卡','¥18')"><div class="font-medium">月卡</div><div class="text-[#7d6171] mt-1">连续包月优惠</div><div class="text-xs text-[#ff5f9a] mt-1">¥18</div></div>
+            <div class="rounded-2xl bg-[#fff4f8] p-3 cursor-pointer hover:ring-2 ring-accent" onclick="buyPlan('年卡','¥168')"><div class="font-medium">年卡</div><div class="text-[#7d6171] mt-1">连续包年优惠</div><div class="text-xs text-[#ff5f9a] mt-1">¥168</div></div>
+            <div class="rounded-2xl bg-[#fff4f8] p-3 cursor-pointer hover:ring-2 ring-accent" onclick="buyPlan('季卡','¥45')"><div class="font-medium">季卡</div><div class="text-[#7d6171] mt-1">适合短期高频用户</div><div class="text-xs text-[#ff5f9a] mt-1">¥45</div></div>
+            <div class="rounded-2xl bg-[#fff4f8] p-3 cursor-pointer hover:ring-2 ring-accent" onclick="buyPlan('永久版','¥298')"><div class="font-medium">永久版</div><div class="text-[#7d6171] mt-1">一次买断无广告</div><div class="text-xs text-[#ff5f9a] mt-1">¥298</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="panel rounded-3xl p-5 border border-[#ecd5e0] bg-white">
+        <div class="flex items-center justify-between mb-4"><h3 class="font-semibold">idol 消耗说明</h3><span class="text-xs text-[#7d6171]">首次免费后启用</span></div>
+        <div class="space-y-3">
+          <div class="rounded-2xl bg-[#fffafc] border border-[#ecd5e0] p-3 flex items-center justify-between"><div><div class="font-medium">AI 一键修图</div><div class="text-xs text-[#7d6171] mt-1">5 idol / 次</div></div><span class="text-[#ff5f9a]">热</span></div>
+          <div class="rounded-2xl bg-[#fffafc] border border-[#ecd5e0] p-3 flex items-center justify-between"><div><div class="font-medium">生成小红书文案</div><div class="text-xs text-[#7d6171] mt-1">2 idol / 次</div></div><span class="text-[#7c6cff]">新</span></div>
+          <div class="rounded-2xl bg-[#fffafc] border border-[#ecd5e0] p-3 flex items-center justify-between"><div><div class="font-medium">生成朋友圈文案</div><div class="text-xs text-[#7d6171] mt-1">2 idol / 次</div></div><span class="text-[#7c6cff]">新</span></div>
+          <div class="rounded-2xl bg-[#fffafc] border border-[#ecd5e0] p-3 flex items-center justify-between"><div><div class="font-medium">成册 PDF</div><div class="text-xs text-[#7d6171] mt-1">8 idol / 次</div></div><span class="text-[#d28d48]">荐</span></div>
+          <div class="rounded-2xl bg-[#fffafc] border border-[#ecd5e0] p-3 flex items-center justify-between"><div><div class="font-medium">视频合成</div><div class="text-xs text-[#7d6171] mt-1">6 idol / 次</div></div><span class="text-[#d28d48]">荐</span></div>
+        </div>
+        <div class="mt-4 rounded-2xl bg-[#fff4f8] border border-[#f4d6e1] p-3 text-xs text-[#7d6171]">积分墙：完成任务、试玩、签到、邀请好友都可获得 idol，用于解锁后续生成能力。</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 视频 ============ -->
+  <section id="view-video" class="view hidden">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div class="panel rounded-3xl p-5 border border-[#ecd5e0] bg-white">
+        <h3 class="font-semibold mb-4">视频设置</h3>
+        <div class="mb-4">
+          <div class="text-xs text-[#7d6171] mb-2">转场效果</div>
+          <div class="flex flex-wrap gap-2" id="transGroup">
+            <button class="pill px-3 py-1.5 rounded-lg text-sm pill-active" onclick="selectTrans(this)">淡入淡出</button>
+            <button class="pill px-3 py-1.5 rounded-lg text-sm" onclick="selectTrans(this)">滑动</button>
+            <button class="pill px-3 py-1.5 rounded-lg text-sm" onclick="selectTrans(this)">缩放</button>
+            <button class="pill px-3 py-1.5 rounded-lg text-sm" onclick="selectTrans(this)">百叶窗</button>
+          </div>
+        </div>
+        <div class="mb-4">
+          <div class="text-xs text-[#7d6171] mb-2">配乐</div>
+          <div class="space-y-2">
+            <label class="flex items-center gap-2 text-sm cursor-pointer"><input type="radio" name="music" value="轻快 · Summer Breeze" checked class="accent-[#7c5cff]"> 轻快 · <span class="text-[#7d6171]">Summer Breeze</span></label>
+            <label class="flex items-center gap-2 text-sm cursor-pointer"><input type="radio" name="music" value="治愈 · Memories" class="accent-[#7c5cff]"> 治愈 · <span class="text-[#7d6171]">Memories</span></label>
+            <label class="flex items-center gap-2 text-sm cursor-pointer"><input type="radio" name="music" value="温暖 · Home" class="accent-[#7c5cff]"> 温暖 · <span class="text-[#7d6171]">Home</span></label>
+          </div>
+        </div>
+        <div class="mb-5">
+          <div class="text-xs text-[#7d6171] mb-2">每张时长</div>
+          <div class="flex items-center gap-3">
+            <input type="range" id="vidDur" min="1" max="5" value="3" class="flex-1 accent-[#7c5cff]" oninput="document.getElementById('vidDurVal').textContent=this.value+' 秒'">
+            <span class="text-sm" id="vidDurVal">3 秒</span>
+          </div>
+        </div>
+        <div class="mb-5">
+          <div class="text-xs text-[#7d6171] mb-2">输出分辨率</div>
+          <div class="flex gap-2" id="resGroup">
+            <button class="pill px-3 py-1.5 rounded-lg text-sm" onclick="selectRes('720P', this)">720P</button>
+            <button class="pill px-3 py-1.5 rounded-lg text-sm pill-active" onclick="selectRes('1080P', this)">1080P</button>
+            <button class="pill px-3 py-1.5 rounded-lg text-sm text-[#d28d48]" onclick="selectRes('4K', this)">4K · 会员</button>
+          </div>
+        </div>
+        <button class="w-full grad-accent rounded-lg py-2.5 text-white font-medium" onclick="renderVideo()">开始合成视频</button>
+        <p class="text-xs text-[#7d6171] mt-2 text-center">本次合成消耗 6 idol（首次免费）· 视频将直接下载</p>
+      </div>
+
+      <div class="panel rounded-3xl p-5 border border-[#ecd5e0] bg-white">
+        <h3 class="font-semibold mb-4">播放预览</h3>
+        <div class="aspect-video rounded-lg overflow-hidden relative bg-rose-50 border border-[#ecd5e0]">
+          <div class="absolute inset-0 flex items-center justify-center">
+            <div class="text-center">
+              <div class="w-14 h-14 mx-auto rounded-full grad-accent flex items-center justify-center text-white text-2xl cursor-pointer hover:scale-105 transition" onclick="renderVideo()">▶</div>
+              <div class="text-xs text-[#7d6171] mt-2" id="vidInfo">— 张 · 点击合成</div>
+            </div>
+          </div>
+        </div>
+        <div class="mt-4 flex gap-2">
+          <div class="h-1 flex-1 rounded bg-accent"></div>
+          <div class="h-1 flex-1 rounded bg-line"></div>
+          <div class="h-1 flex-1 rounded bg-line"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- PDF 弹窗 -->
+<div id="pdfModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70">
+  <div class="glass rounded-3xl p-6 max-w-sm w-full mx-4 slide border border-[#ecd5e0]">
+    <div class="text-center">
+      <div class="text-3xl mb-2">📔</div>
+      <h3 class="font-bold text-lg">相册 PDF 已生成</h3>
+      <p class="text-sm text-[#7d6171] mt-2" id="pdfInfo">已包含当前图片，正在下载</p>
+      <div class="mt-4 bg-rose-50 rounded-lg p-3 text-left">
+        <div class="text-xs text-[#7d6171]">支持直接在线打印下单：</div>
+        <div class="text-sm mt-1">天猫 / 京东 / 线下冲印店均可</div>
+      </div>
+      <button class="w-full grad-accent rounded-lg py-2.5 mt-4 text-white font-medium" onclick="closePdfModal()">完成</button>
+      <button class="w-full border border-[#ecd5e0] rounded-lg py-2.5 mt-2 text-sm hover:bg-rose-50 transition" onclick="printOrder()">🖨 一键在线打印</button>
+    </div>
+  </div>
+</div>
+
+<!-- 视频弹窗 -->
+<div id="videoModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70">
+  <div class="glass rounded-3xl p-6 max-w-sm w-full mx-4 slide text-center border border-[#ecd5e0]">
+    <div class="text-3xl mb-2">🎬</div>
+    <h3 class="font-bold text-lg" id="videoTitle">正在合成视频…</h3>
+    <p class="text-sm text-[#7d6171] mt-2" id="videoInfo">请稍候</p>
+    <div class="mt-4 w-full h-24 rounded-lg bg-rose-50 flex items-center justify-center text-[#7d6171] text-sm shimmer" id="videoBody">合成中</div>
+    <button class="w-full grad-accent rounded-lg py-2.5 mt-4 text-white font-medium hidden" id="videoDone" onclick="closeVideoModal()">保存视频</button>
+  </div>
+</div>
+
+<!-- 提示 toast -->
+<div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 hidden glass border border-[#ecd5e0] rounded-full px-4 py-2.5 text-sm slide"></div>
+
+<script>
+  /* ============ 状态与持久化 ============ */
+  const LS_KEY = 'meiyi_state_v2';
+  const FILTERS = {
+    warm: 'sepia(0.25) saturate(1.4) contrast(1.05)',
+    cool: 'saturate(0.85) contrast(1.15) hue-rotate(180deg)',
+    bw: 'grayscale(1) contrast(1.2)',
+    vintage: 'sepia(0.5) contrast(1.1) saturate(0.9) brightness(0.95)',
+    fade: 'saturate(0.7) contrast(0.95) brightness(1.08)'
+  };
+  const SAMPLE_GRAD = [['#ff9a9e','#fad0c4'],['#a1c4fd','#c2e9fb'],['#fbc2eb','#a6c1ee'],['#f6d365','#fda085'],['#84fab0','#8fd3f4'],['#d4a5a5','#ffecb3']];
+
+  let state = {
+    images: [],
+    filter: 'warm',
+    params: { brightness:105, saturation:130, contrast:108, watermark:true, watermarkText:'@美艺用户', ratio:'4:3' },
+    presets: [
+      { name:'电商暖色', filter:'warm', params:{ brightness:105, saturation:130, contrast:108, watermark:true, watermarkText:'@美艺用户', ratio:'4:3' }, use:64 },
+      { name:'清冷旅拍', filter:'cool', params:{ brightness:100, saturation:90, contrast:120, watermark:false, watermarkText:'', ratio:'3:4' }, use:18 },
+      { name:'复古胶片', filter:'vintage', params:{ brightness:95, saturation:90, contrast:110, watermark:true, watermarkText:'@胶片', ratio:'1:1' }, use:9 }
+    ],
+    idol: 10,
+    lastSign: '',
+    albumCount: 0,
+    member: '免费版',
+    habits: 3
+  };
+
+  function makeSample(i){
+    const c=document.createElement('canvas'); c.width=c.height=400;
+    const x=c.getContext('2d');
+    const g=x.createLinearGradient(0,0,400,400);
+    g.addColorStop(0,SAMPLE_GRAD[i%6][0]); g.addColorStop(1,SAMPLE_GRAD[i%6][1]);
+    x.fillStyle=g; x.fillRect(0,0,400,400);
+    x.fillStyle='rgba(255,255,255,.85)'; x.font='bold 30px sans-serif'; x.textAlign='center';
+    x.fillText('示例 '+(i+1),200,210);
+    return c.toDataURL('image/jpeg',0.9);
+  }
+
+  function loadState(){
+    try{
+      const raw = localStorage.getItem(LS_KEY);
+      if(raw){ const s=JSON.parse(raw); state=Object.assign(state,s); }
+    }catch(e){}
+    if(!state.images || !state.images.length){
+      state.images = SAMPLE_GRAD.map((_,i)=>makeSample(i));
+    }
+  }
+  function saveState(){
+    try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }catch(e){}
+  }
+
+  /* ============ 视图切换 ============ */
+  function switchView(name){
+    document.querySelectorAll('.view').forEach(v=>v.classList.add('hidden'));
+    const el=document.getElementById('view-'+name);
+    if(el){ el.classList.remove('hidden'); el.classList.add('slide'); }
+    document.querySelectorAll('#navTabs button').forEach(b=>b.classList.toggle('tab-active', b.dataset.view===name));
+    if(name==='album') renderAlbumPreview();
+    if(name==='habit') renderPresets();
+    if(name==='wallet') renderWallet();
+    if(name==='video') updateVidInfo();
+  }
+  document.querySelectorAll('#navTabs button').forEach(b=>b.addEventListener('click',()=>switchView(b.dataset.view)));
+
+  /* ============ 图片队列 ============ */
+  function importImages(){ document.getElementById('fileInput').click(); }
+  function handleFiles(e){
+    const files=[...e.target.files];
+    if(!files.length) return;
+    let done=0;
+    files.forEach(f=>{
+      const r=new FileReader();
+      r.onload=ev=>{
+        const img=new Image();
+        img.onload=()=>{
+          const max=1000; let w=img.width,h=img.height;
+          if(w>max||h>max){ const s=max/Math.max(w,h); w=Math.round(w*s); h=Math.round(h*s); }
+          const c=document.createElement('canvas'); c.width=w; c.height=h;
+          c.getContext('2d').drawImage(img,0,0,w,h);
+          state.images.push(c.toDataURL('image/jpeg',0.85));
+          if(++done===files.length){ saveState(); renderImages(); showToast('已导入 '+files.length+' 张图片'); }
+        };
+        img.src=ev.target.result;
+      };
+      r.readAsDataURL(f);
+    });
+    e.target.value='';
+  }
+  function renderImages(){
+    const grid=document.getElementById('imgGrid');
+    grid.innerHTML='';
+    state.images.forEach((url,idx)=>{
+      const d=document.createElement('div');
+      d.className='aspect-square rounded-lg overflow-hidden relative cursor-pointer img-thumb';
+      d.dataset.idx=idx;
+      const im=document.createElement('img');
+      im.src=url; im.className='w-full h-full object-cover'; im.draggable=false;
+      d.appendChild(im);
+      d.onclick=()=>{ document.querySelectorAll('.img-thumb').forEach(x=>x.classList.remove('selected')); d.classList.add('selected'); };
+      grid.appendChild(d);
+    });
+    applyFilterToAll();
+    document.getElementById('queueCount').textContent=state.images.length+' 张已导入';
+    document.getElementById('statImg').textContent=state.images.length;
+    updateVidInfo();
+    renderAlbumPreview();
+  }
+  function applyFilterToAll(){
+    const f=FILTERS[state.filter]||'';
+    const p=state.params;
+    const filterStr = f + ' brightness('+(p.brightness/100)+') saturate('+(p.saturation/100)+') contrast('+(p.contrast/100)+')';
+    document.querySelectorAll('#imgGrid img').forEach(im=>{ im.style.filter=filterStr; });
+  }
+
+  /* ============ 修图参数 ============ */
+  function applyFilter(name, btn){
+    state.filter=name;
+    document.querySelectorAll('#filterGroup button').forEach(b=>b.classList.remove('pill-active'));
+    btn.classList.add('pill-active');
+    applyFilterToAll(); saveState();
+  }
+  function updateBrightness(v){ document.getElementById('val-br').textContent=v; state.params.brightness=+v; applyFilterToAll(); saveState(); }
+  function updateSaturation(v){ document.getElementById('val-sat').textContent=v; state.params.saturation=+v; applyFilterToAll(); saveState(); }
+  function updateContrast(v){ document.getElementById('val-con').textContent=v; state.params.contrast=+v; applyFilterToAll(); saveState(); }
+  function applyWatermark(){
+    state.params.watermark=document.getElementById('wmChk').checked;
+    state.params.watermarkText=document.getElementById('wmText').value;
+    saveState(); showToast('水印设置已更新');
+  }
+  function setRatio(r, btn){
+    state.params.ratio=r;
+    document.querySelectorAll('#ratioGroup button').forEach(b=>b.classList.remove('pill-active'));
+    btn.classList.add('pill-active'); saveState();
+  }
+  function toggleChip(btn){ btn.classList.toggle('pill-active'); }
+
+  function batchApply(){
+    applyFilterToAll();
+    saveState();
+    showToast('已套用「'+(state.filter==='warm'?'电商暖色':state.filter)+'」滤镜到 '+state.images.length+' 张图片');
+  }
+  function saveCurrentStyle(){ savePreset(); }
+  function savePreset(){
+    const name=prompt('给这套风格起个名字：','我的预设'+ (state.presets.length+1));
+    if(!name) return;
+    state.presets.unshift({ name, filter:state.filter, params:{...state.params}, use:0 });
+    state.habits=state.presets.length;
+    saveState(); renderPresets();
+    showToast('预设「'+name+'」已保存，AI 已记录本次习惯');
+  }
+  function applyPreset(p){
+    state.filter=p.filter; state.params={...p.params};
+    document.querySelectorAll('#filterGroup button').forEach(b=>b.classList.toggle('pill-active', b.textContent.trim()===({warm:'暖色',cool:'冷调',bw:'黑白',vintage:'复古',fade:'褪色'}[p.filter]||'')));
+    document.getElementById('val-br').textContent=p.params.brightness;
+    document.getElementById('val-sat').textContent=p.params.saturation;
+    document.getElementById('val-con').textContent=p.params.contrast;
+    document.getElementById('wmChk').checked=!!p.params.watermark;
+    document.getElementById('wmText').value=p.params.watermarkText||'';
+    document.querySelectorAll('#ratioGroup button').forEach(b=>b.classList.toggle('pill-active', b.textContent.trim()===p.params.ratio));
+    applyFilterToAll(); saveState();
+    switchView('batch'); showToast('已套用预设「'+p.name+'」');
+  }
+
+  /* ============ 预设页 ============ */
+  function renderPresets(){
+    const grid=document.getElementById('presetGrid');
+    grid.innerHTML='';
+    state.presets.forEach((p,idx)=>{
+      const g=SAMPLE_GRAD[idx%6];
+      const d=document.createElement('div'); d.className='rounded-3xl border border-[#ecd5e0] p-4 bg-white';
+      d.innerHTML=`
+        <div class="flex items-start justify-between">
+          <div class="w-12 h-12 rounded-lg overflow-hidden" style="background:linear-gradient(135deg,${g[0]},${g[1]})"></div>
+          <span class="text-[10px] text-[#ff5f9a] bg-[#fdf0f4] rounded px-2 py-0.5">${idx===0?'AI 高频推荐':'自建'}</span>
+        </div>
+        <div class="font-medium mt-3">${p.name}</div>
+        <div class="text-xs text-[#7d6171] mt-1">${p.filter} · 饱和 ${p.params.saturation} · 亮度 ${p.params.brightness} · ${p.params.watermark?'水印':''}</div>
+        <div class="text-[10px] text-[#7d6171] mt-2">本月使用 ${p.use} 次</div>
+        <div class="flex gap-2 mt-3">
+          <button class="flex-1 text-xs border border-[#ecd5e0] rounded-lg py-1.5 hover:bg-line transition" onclick="applyPreset(state.presets[${idx}])">套用</button>
+          <button class="flex-1 text-xs grad-accent text-white rounded-lg py-1.5" onclick="deletePreset(${idx})">删除</button>
+        </div>`;
+      grid.appendChild(d);
+    });
+    document.getElementById('presetCount').textContent='（共 '+state.presets.length+' 套）';
+    document.getElementById('navHabitCount').textContent=state.presets.length;
+    document.getElementById('statHabit').textContent=state.presets.length;
+  }
+  function deletePreset(idx){
+    state.presets.splice(idx,1); state.habits=state.presets.length; saveState(); renderPresets(); showToast('预设已删除');
+  }
+
+  /* ============ 相册 PDF（jsPDF 真实导出）============ */
+  function selectAlbumLayout(btn){ document.querySelectorAll('#albumLayout button').forEach(b=>b.classList.remove('border-accent')); btn.classList.add('border-accent'); }
+  function selectTpl(btn){ document.querySelectorAll('#albumTpl button').forEach(b=>b.classList.remove('pill-active')); btn.classList.add('pill-active'); }
+
+  function renderAlbumPreview(){
+    const wrap=document.getElementById('albumPreview'); if(!wrap) return;
+    wrap.innerHTML='';
+    const title=document.getElementById('albumTitle').value||'我的相册';
+    const cover=document.createElement('div');
+    cover.className='aspect-[3/4] rounded-lg p-3 flex flex-col items-center justify-center gap-2 bg-rose-50 border border-[#ecd5e0]';
+    cover.innerHTML=`<div class="w-8 h-8 rounded grad-accent flex items-center justify-center text-white text-sm font-bold">艺</div><div class="text-center"><div class="font-medium text-sm">${title}</div><div class="text-[10px] text-[#7d6171]">2026 · 夏</div></div>`;
+    wrap.appendChild(cover);
+    const n=Math.min(state.images.length,6);
+    for(let i=0;i<n;i++){
+      const d=document.createElement('div');
+      d.className='aspect-[3/4] rounded-lg overflow-hidden flex flex-col gap-1 bg-rose-50 border border-[#ecd5e0] p-2';
+      d.innerHTML=`<div class="flex-1 rounded" style="background:url('${state.images[i]}') center/cover"></div><div class="text-[10px] text-[#7d6171] text-center">p.${i+1}</div>`;
+      wrap.appendChild(d);
+    }
+    const pages=Math.max(1, Math.ceil(state.images.length/2));
+    document.getElementById('albumPages').textContent=state.images.length+' 张 → '+pages+' 页方册';
+  }
+
+  function showPdfModal(){
+    if(!state.images.length){ showToast('请先导入图片'); return; }
+    showPdfModalLoading();
+    generateAlbumPdf();
+  }
+  function showPdfModalLoading(){
+    const m=document.getElementById('pdfModal');
+    m.classList.remove('hidden'); m.classList.add('flex');
+    document.getElementById('pdfInfo').textContent='正在生成 '+state.images.length+' 张的相册 PDF…';
+  }
+  function generateAlbumPdf(){
+    if(!window.jspdf || !window.jspdf.jsPDF){
+      document.getElementById('pdfInfo').textContent='PDF 组件未加载（需联网加载 jsPDF）';
+      return;
+    }
+    const { jsPDF } = window.jspdf;
+    const doc=new jsPDF({ unit:'pt', format:[384,512] });
+    const title=document.getElementById('albumTitle').value||'我的相册';
+    const perW=384, perH=512, pad=24;
+    doc.setFillColor(255,244,248); doc.rect(0,0,perW,perH,'F');
+    doc.setTextColor(60,40,55); doc.setFontSize(22); doc.text(title, perW/2, perH/2-10, {align:'center'});
+    doc.setFontSize(11); doc.setTextColor(150,120,130); doc.text('2026 · 美艺 MeiYi', perW/2, perH/2+12, {align:'center'});
+    let page=1;
+    state.images.forEach((url,i)=>{
+      doc.addPage(); page++;
+      const imgW=perW-pad*2, imgH=perH-pad*2-30;
+      try{ doc.addImage(url,'JPEG',pad,pad+20,imgW,imgH); }catch(e){}
+      doc.setFontSize(9); doc.setTextColor(150,120,130); doc.text('p.'+page, perW/2, perH-10, {align:'center'});
+    });
+    doc.save('meiyi-album.pdf');
+    state.albumCount++;
+    state.idol=Math.max(0, state.idol-8);
+    saveState();
+    document.getElementById('pdfInfo').textContent=state.images.length+' 张 · '+(page)+' 页 · 已下载 PDF（消耗 8 idol）';
+    updateIdolUI();
+  }
+  function closePdfModal(){ const m=document.getElementById('pdfModal'); m.classList.add('hidden'); m.classList.remove('flex'); }
+  function printOrder(){ showToast('已跳转在线打印下单（演示）'); }
+
+  /* ============ 视频合成（Canvas + MediaRecorder）============ */
+  function selectTrans(btn){ document.querySelectorAll('#transGroup button').forEach(b=>b.classList.remove('pill-active')); btn.classList.add('pill-active'); }
+  function selectRes(r, btn){ if(r==='4K'){ showToast('4K 为会员权益，已临时允许演示'); } document.querySelectorAll('#resGroup button').forEach(b=>b.classList.remove('pill-active')); btn.classList.add('pill-active'); }
+  function updateVidInfo(){ const n=state.images.length; const dur=+document.getElementById('vidDur').value||3; document.getElementById('vidInfo').textContent=n+' 张 · 约 '+Math.round(n*dur/60*10)/10+' 分'; }
+
+  function loadImg(url){ return new Promise(res=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=()=>res(null); im.src=url; }); }
+  function drawCover(ctx,img,W,H){
+    if(!img){ ctx.fillStyle='#eee'; ctx.fillRect(0,0,W,H); return; }
+    const s=Math.max(W/img.width, H/img.height);
+    const w=img.width*s, h=img.height*s;
+    ctx.drawImage(img,(W-w)/2,(H-h)/2,w,h);
+  }
+  function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+  async function renderVideo(){
+    const imgs=state.images;
+    if(!imgs.length){ showToast('请先导入图片'); return; }
+    const modal=document.getElementById('videoModal');
+    modal.classList.remove('hidden'); modal.classList.add('flex');
+    document.getElementById('videoTitle').textContent='正在合成视频…';
+    document.getElementById('videoInfo').textContent='读取 '+imgs.length+' 张图片';
+    document.getElementById('videoBody').textContent='合成中';
+    document.getElementById('videoDone').classList.add('hidden');
+
+    const loaded=await Promise.all(imgs.map(loadImg));
+    let stream, rec, chunks=[];
+    let mime='video/webm';
+    try{
+      if(!window.MediaRecorder || !MediaRecorder.isTypeSupported(mime)) mime='video/mp4';
+      const canvas=document.createElement('canvas'); canvas.width=720; canvas.height=720;
+      const ctx=canvas.getContext('2d');
+      stream=canvas.captureStream(30);
+      rec=new MediaRecorder(stream,{mimeType:mime});
+      rec.ondataavailable=e=>{ if(e.data && e.data.size) chunks.push(e.data); };
+      rec.onstop=()=>{
+        const blob=new Blob(chunks,{type:mime});
+        downloadBlob(blob,'meiyi-video.'+(mime.indexOf('mp4')>=0?'mp4':'webm'));
+        state.idol=Math.max(0,state.idol-6); saveState(); updateIdolUI();
+        document.getElementById('videoTitle').textContent='视频合成完成';
+        document.getElementById('videoInfo').textContent=imgs.length+' 张 · 已下载';
+        document.getElementById('videoBody').textContent='✅ 已保存到本地';
+        document.getElementById('videoDone').classList.remove('hidden');
+      };
+      rec.start();
+      const per=Math.max(800,(+document.getElementById('vidDur').value||3)*1000);
+      for(const im of loaded){
+        ctx.fillStyle='#fff'; ctx.fillRect(0,0,720,720);
+        drawCover(ctx,im,720,720);
+        document.getElementById('videoInfo').textContent='渲染中…';
+        await sleep(per);
+      }
+      rec.stop();
+    }catch(err){
+      document.getElementById('videoTitle').textContent='当前浏览器不支持视频录制';
+      document.getElementById('videoInfo').textContent='已为你打开图片序列预览（演示）';
+      document.getElementById('videoBody').textContent='⚠️ 需 Chrome/Edge 浏览器';
+      document.getElementById('videoDone').classList.remove('hidden');
+    }
+  }
+  function downloadBlob(blob,name){
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),3000);
+  }
+  function closeVideoModal(){ const m=document.getElementById('videoModal'); m.classList.add('hidden'); m.classList.remove('flex'); }
+
+  /* ============ AI 修图 ============ */
+  function generateAiRepair(){
+    const p=state.presets[0]; applyPreset(p);
+    showToast('AI 已按你的高频习惯「'+p.name+'」完成一键修图');
+  }
+
+  /* ============ AI 对话 ============ */
+  function sendAi(){
+    const inp=document.getElementById('chatInput'); const txt=inp.value.trim(); if(!txt) return;
+    appendChat('user', txt); inp.value='';
+    const t=txt.toLowerCase();
+    let reply='';
+    if(t.includes('小红书')||t.includes('文案')){ genCopy('xhs'); reply='已为你生成小红书推文，可在左侧查看并复制～'; }
+    else if(t.includes('朋友圈')){ genCopy('moments'); reply='已生成朋友圈文案，已复制到剪贴板区域。'; }
+    else if(t.includes('相册')||t.includes('pdf')||t.includes('打印')){ reply='正在为你生成相册 PDF…'; setTimeout(()=>{ switchView('album'); showPdfModal(); },300); }
+    else if(t.includes('视频')||t.includes('短片')){ reply='正在合成图片视频，完成后会自动下载～'; setTimeout(()=>renderVideo(),300); }
+    else if(t.includes('奶油')||t.includes('日系')||t.includes('暖')){ applyFilter('warm', document.querySelectorAll('#filterGroup button')[0]); reply='已把滤镜调成「暖色 / 奶油风」，可继续微调亮度饱和度。'; }
+    else if(t.includes('冷')||t.includes('清冷')){ applyFilter('cool', document.querySelectorAll('#filterGroup button')[1]); reply='已切到「冷调」，更适合旅拍清冷风。'; }
+    else if(t.includes('复古')){ applyFilter('vintage', document.querySelectorAll('#filterGroup button')[3]); reply='已套用「复古」滤镜。'; }
+    else { reply='收到～你可以说“调成奶油风并生成小红书文案”，或“做成相册 PDF / 合成视频”，我都能直接帮你做。'; }
+    setTimeout(()=>appendChat('ai', reply), 400);
+  }
+  function appendChat(role, text){
+    const log=document.getElementById('chatLog');
+    const d=document.createElement('div'); d.className='chat-msg rounded-2xl p-3 text-sm '+(role==='user'?'bg-accent text-white self-end ml-auto':'bg-[#fff4f8] border border-[#f4d6e1]');
+    d.textContent=text; log.appendChild(d); log.scrollTop=log.scrollHeight;
+  }
+  function openVoiceAssist(){
+    switchView('post');
+    try{
+      const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+      if(!SR){ showToast('当前浏览器不支持语音识别，已切到文字输入'); document.getElementById('chatInput').focus(); return; }
+      const r=new SR(); r.lang='zh-CN'; r.interimResults=false;
+      showToast('🎤 正在聆听，请说话…');
+      r.onresult=e=>{ const t=e.results[0][0].transcript; document.getElementById('chatInput').value=t; sendAi(); };
+      r.onerror=()=>showToast('语音识别失败，请直接输入文字');
+      r.start();
+    }catch(e){ showToast('语音功能不可用，请直接输入'); }
+  }
+
+  /* ============ 推文生成（真实文案）============ */
+  function selectPostType(btn){ document.querySelectorAll('#postType button').forEach(b=>b.classList.remove('pill-active')); btn.classList.add('pill-active'); }
+  function genCopy(type){
+    const input=document.getElementById('postInput').value.trim();
+    const topicBtns=[...document.querySelectorAll('#postTopic .pill-active')].map(b=>b.textContent.trim());
+    const topic=(topicBtns[0]||'日常')+(topicBtns[1]?'·'+topicBtns[1]:'');
+    let copy='';
+    if(type==='xhs'){
+      copy=`✨ ${input||'今天也要好好生活'}\n\n把这组照片修成了奶油柔光，像给日子盖了一层温柔滤镜。${topic?'\n风格关键词：'+topic:''}\n\n📷 修图：美艺 MeiYi（AI 一键记住我的审美）\n#奶油风 #'+ (topic.split('·')[0]||'生活记录') +' #修图教程 #氛围感`;
+    }else{
+      copy=`${input||'记录今日份小确幸'} 🌷\n调成奶油柔光的样子，心情都变温柔了～${topic?'\n（'+topic+'）':''}`;
+    }
+    const box=document.getElementById('postResult');
+    box.textContent=copy; box.classList.remove('hidden');
+    window._lastCopy=copy;
+    state.idol=Math.max(0,state.idol-2); saveState(); updateIdolUI();
+    showToast(type==='xhs'?'已生成小红书推文（消耗 2 idol）':'已生成朋友圈文案（消耗 2 idol）');
+  }
+  function copyPost(){ if(window._lastCopy){ navigator.clipboard&&navigator.clipboard.writeText(window._lastCopy); showToast('文案已复制'); } else showToast('请先生成文案'); }
+
+  /* ============ 会员 / idol ============ */
+  function renderWallet(){
+    document.getElementById('idolBig').textContent=state.idol;
+    const today=new Date().toISOString().slice(0,10);
+    const signed=(state.lastSign===today);
+    const btn=document.getElementById('signBtn');
+    btn.disabled=signed; btn.textContent=signed?'今日已签到 ✓':'每日签到 +3';
+    btn.style.opacity=signed?'0.5':'1';
+    document.getElementById('statIdol').textContent=state.idol;
+    document.getElementById('statMember').textContent=state.member;
+  }
+  function dailyLogin(){
+    const today=new Date().toISOString().slice(0,10);
+    if(state.lastSign===today){ showToast('今天已经签到过啦'); return; }
+    state.idol+=3; state.lastSign=today; saveState(); updateIdolUI(); renderWallet();
+    showToast('每日签到 +3 idol，当前 '+state.idol);
+  }
+  function wallTask(){ state.idol+=2; saveState(); updateIdolUI(); showToast('完成积分墙任务，+2 idol'); }
+  function inviteFriend(){ state.idol+=5; saveState(); updateIdolUI(); showToast('邀请好友成功 +5 idol'); }
+  function buyPlan(name,price){ state.member=name; saveState(); document.getElementById('statMember').textContent=name; showToast('已开通'+name+'（'+price+'，演示）'); }
+  function updateIdolUI(){
+    document.getElementById('idolBig').textContent=state.idol;
+    document.getElementById('statIdol').textContent=state.idol;
+  }
+
+  /* ============ toast ============ */
+  let toastTimer=null;
+  function showToast(msg){
+    const t=document.getElementById('toast'); t.textContent=msg; t.classList.remove('hidden');
+    clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.add('hidden'),2200);
+  }
+
+  /* ============ 初始化 ============ */
+  loadState();
+  document.getElementById('val-br').textContent=state.params.brightness;
+  document.getElementById('val-sat').textContent=state.params.saturation;
+  document.getElementById('val-con').textContent=state.params.contrast;
+  document.getElementById('wmChk').checked=!!state.params.watermark;
+  document.getElementById('wmText').value=state.params.watermarkText||'';
+  document.querySelectorAll('#filterGroup button').forEach(b=>b.classList.toggle('pill-active', b.textContent.trim()===( {warm:'暖色',cool:'冷调',bw:'黑白',vintage:'复古',fade:'褪色'}[state.filter]||'')));
+  document.querySelectorAll('#ratioGroup button').forEach(b=>b.classList.toggle('pill-active', b.textContent.trim()===state.params.ratio));
+  renderImages();
+  renderPresets();
+  renderWallet();
+  updateIdolUI();
+  document.getElementById('albumTitle').addEventListener('input', renderAlbumPreview);
+  document.getElementById('vidDur').addEventListener('input', updateVidInfo);
+  document.getElementById('pdfModal').addEventListener('click', e=>{ if(e.target.id==='pdfModal') closePdfModal(); });
+  document.getElementById('videoModal').addEventListener('click', e=>{ if(e.target.id==='videoModal') closeVideoModal(); });
+</script>
+<script>
+  if('serviceWorker' in navigator && location.protocol.startsWith('http')){
+    window.addEventListener('load', function(){
+      navigator.serviceWorker.register('sw.js').then(function(){ console.log('SW registered'); }).catch(function(e){ console.log('SW fail', e); });
+    });
+  }
+</script>
+</body>
+</html>
