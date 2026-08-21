@@ -38,32 +38,40 @@
   @keyframes shimmer { 100% { transform: translateX(100%);} }
   .img-thumb.selected { outline: 3px solid #ff6fa8; outline-offset: 2px; }
   .chat-msg { max-width: 85%; }
+  #navTabs { scrollbar-width: none; -ms-overflow-style: none; }
+  #navTabs::-webkit-scrollbar { display: none; height: 0; }
 </style>
 </head>
 <body class="min-h-screen text-[15px]">
 
 <!-- 顶部导航 -->
 <header class="sticky top-0 z-20 glass border-b border-[#ecd5e0] shadow-sm">
-  <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-    <div class="flex items-center gap-2.5">
-      <div class="w-9 h-9 rounded-2xl grad-accent flex items-center justify-center text-white font-bold text-sm">艺</div>
-      <div>
-        <div class="font-semibold leading-none">美艺 <span class="text-[#7d6171] font-normal text-xs">MeiYi</span></div>
-        <div class="text-[10px] text-[#7d6171] mt-0.5">批量修图 · AI 会记住你的习惯</div>
+  <div class="max-w-7xl mx-auto px-4 py-2 sm:py-0 sm:h-16 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+    <!-- 左：Logo（移动端同行右侧放“去广告”按钮） -->
+    <div class="flex items-center justify-between sm:justify-start sm:flex-1 gap-2.5">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <div class="w-9 h-9 rounded-2xl grad-accent flex items-center justify-center text-white font-bold text-sm shrink-0">艺</div>
+        <div class="min-w-0">
+          <div class="font-semibold leading-none truncate">美艺 <span class="text-[#7d6171] font-normal text-xs">MeiYi</span></div>
+          <div class="text-[10px] text-[#7d6171] mt-0.5 hidden sm:block">批量修图 · AI 会记住你的习惯</div>
+        </div>
       </div>
+      <button class="grad-accent text-white text-xs px-3 py-1.5 rounded-full font-medium shadow-sm shrink-0 sm:hidden" onclick="switchView('wallet')">去广告</button>
     </div>
-    <nav class="flex items-center gap-1 text-sm rounded-full bg-white/85 p-1 shadow-sm overflow-x-auto max-w-[72vw]" id="navTabs">
-      <button class="px-3 py-1.5 rounded-full tab-active" data-view="workbench">首页</button>
-      <button class="px-3 py-1.5 rounded-full hover:bg-rose-50 transition" data-view="batch">修图</button>
-      <button class="px-3 py-1.5 rounded-full hover:bg-rose-50 transition" data-view="habit">预设</button>
-      <button class="px-3 py-1.5 rounded-full hover:bg-rose-50 transition" data-view="album">相册</button>
-      <button class="px-3 py-1.5 rounded-full hover:bg-rose-50 transition" data-view="video">视频</button>
-      <button class="px-3 py-1.5 rounded-full hover:bg-rose-50 transition" data-view="post">推文</button>
-      <button class="px-3 py-1.5 rounded-full hover:bg-rose-50 transition" data-view="wallet">会员</button>
+    <!-- 中：导航标签（移动端整行横滑） -->
+    <nav class="flex items-center gap-1 text-sm rounded-full bg-white/85 p-1 shadow-sm overflow-x-auto w-full sm:w-auto sm:max-w-[58vw] no-snap" id="navTabs">
+      <button class="px-3 py-1.5 rounded-full tab-active whitespace-nowrap" data-view="workbench">首页</button>
+      <button class="px-3 py-1.5 rounded-full hover:bg-rose-50 transition whitespace-nowrap" data-view="batch">修图</button>
+      <button class="px-3 py-1.5 rounded-full hover:bg-rose-50 transition whitespace-nowrap" data-view="habit">预设</button>
+      <button class="px-3 py-1.5 rounded-full hover:bg-rose-50 transition whitespace-nowrap" data-view="album">相册</button>
+      <button class="px-3 py-1.5 rounded-full hover:bg-rose-50 transition whitespace-nowrap" data-view="video">视频</button>
+      <button class="px-3 py-1.5 rounded-full hover:bg-rose-50 transition whitespace-nowrap" data-view="post">推文</button>
+      <button class="px-3 py-1.5 rounded-full hover:bg-rose-50 transition whitespace-nowrap" data-view="wallet">会员</button>
     </nav>
-    <div class="flex items-center gap-2">
-      <span class="text-xs text-[#7d6171] hidden sm:inline">已记录 <span id="navHabitCount">0</span> 个习惯</span>
-      <button class="grad-accent text-white text-sm px-3 py-2 rounded-full font-medium shadow-sm" onclick="switchView('wallet')">去广告</button>
+    <!-- 右：桌面端信息 + 去广告 -->
+    <div class="hidden sm:flex items-center gap-2 sm:flex-1 sm:justify-end">
+      <span class="text-xs text-[#7d6171] hidden lg:inline">已记录 <span id="navHabitCount">0</span> 个习惯</span>
+      <button class="grad-accent text-white text-sm px-3 py-2 rounded-full font-medium shadow-sm shrink-0" onclick="switchView('wallet')">去广告</button>
     </div>
   </div>
 </header>
